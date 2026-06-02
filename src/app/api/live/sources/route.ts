@@ -7,6 +7,30 @@ import { requireFeaturePermission } from '@/lib/permissions';
 
 export const runtime = 'nodejs';
 
+interface EnvLiveSource {
+  key: string;
+  name: string;
+  url: string;
+  from: 'custom';
+  disabled?: boolean;
+}
+
+function parseLiveSourceUrls(envValue: string): EnvLiveSource[] {
+  const urls = envValue
+    .split(/[,
+]/)
+    .map((url) => url.trim())
+    .filter((url) => url.length > 0 && url.startsWith('http'));
+
+  return urls.map((url, index) => ({
+    key: `env-live-${index}`,
+    name: `环境变量源 ${index + 1}`,
+    url,
+    from: 'custom' as const,
+    disabled: false,
+  }));
+}
+
 export async function GET(request: NextRequest) {
   console.log(request.url)
   try {
@@ -20,6 +44,13 @@ export async function GET(request: NextRequest) {
 
     // 过滤出所有非 disabled 的直播源
     const liveSources = (config.LiveConfig || []).filter(source => !source.disabled);
+
+    // 从环境变量 LIVE_SOURCE_URL 读取额外的直播源
+    const envLiveSourceUrl = process.env.LIVE_SOURCE_URL;
+    if (envLiveSourceUrl) {
+      const envSources = parseLiveSourceUrls(envLiveSourceUrl);
+      liveSources.push(...envSources as any);
+    }
 
     return NextResponse.json({
       success: true,

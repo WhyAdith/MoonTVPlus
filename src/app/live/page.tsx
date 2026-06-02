@@ -341,10 +341,17 @@ function LivePageClient() {
       }
 
       const sources = result.data;
+      // 环境变量源优先排在前面（频道更全）
+      sources.sort((a: any, b: any) => {
+        const aIsEnv = a.key?.startsWith('env-live-') ? 1 : 0;
+        const bIsEnv = b.key?.startsWith('env-live-') ? 1 : 0;
+        if (aIsEnv !== bIsEnv) return bIsEnv - aIsEnv;
+        return (b.channelNumber || 0) - (a.channelNumber || 0);
+      });
       setLiveSources(sources);
 
       if (sources.length > 0) {
-        // 默认选中第一个源
+        // 默认选中优先源（环境变量源优先）
         const firstSource = sources[0];
         if (needLoadSource) {
           const foundSource = sources.find((s: LiveSource) => s.key === needLoadSource);
