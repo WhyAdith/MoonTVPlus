@@ -65,8 +65,7 @@ export async function getCachedLiveChannels(
       const envLiveSourceUrl = process.env.LIVE_SOURCE_URL;
       if (envLiveSourceUrl) {
         const urls = envLiveSourceUrl
-          .split(/[,
-]/)
+          .split(/[,\n]/)
           .map((url) => url.trim())
           .filter((url) => url.length > 0 && url.startsWith('http'));
         const index = parseInt(key.replace('env-live-', ''), 10);

@@ -17,8 +17,7 @@ interface EnvLiveSource {
 
 function parseLiveSourceUrls(envValue: string): EnvLiveSource[] {
   const urls = envValue
-    .split(/[,
-]/)
+    .split(/[,\n]/)
     .map((url) => url.trim())
     .filter((url) => url.length > 0 && url.startsWith('http'));
 
