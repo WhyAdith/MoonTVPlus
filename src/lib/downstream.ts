@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { parseStringPromise } from 'xml2js';
+
 import { API_CONFIG, ApiSite, getConfig } from '@/lib/config';
 import { getCachedSearchPage, setCachedSearchPage } from '@/lib/search-cache';
 import { SearchResult } from '@/lib/types';
@@ -17,6 +19,98 @@ interface ApiSearchItem {
   vod_douban_id?: number;
   type_name?: string;
   vod_total?: number;
+}
+
+/**
+ * 检测响应是否为XML格式
+ */
+function isXmlResponse(response: Response, text: string): boolean {
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('xml')) return true;
+  return text.trimStart().startsWith('<?xml');
+}
+
+/**
+ * 解析XML格式的视频列表为JSON格式
+ */
+async function parseXmlVideoList(xmlText: string): Promise<any> {
+  const parsed = await parseStringPromise(xmlText, {
+    explicitArray: false,
+    trim: true,
+    mergeAttrs: true,
+  });
+
+  const rss = parsed?.rss;
+  if (!rss) return null;
+
+  const list = rss.list;
+  if (!list) return null;
+
+  const page = parseInt(list.page || '1', 10);
+  const pagecount = parseInt(list.pagecount || '1', 10);
+  const pagesize = parseInt(list.pagesize || '20', 10);
+  const recordcount = parseInt(list.recordcount || '0', 10);
+
+  let videos = list.video || [];
+  if (!Array.isArray(videos)) videos = [videos];
+
+  const vodList = videos.map((v: any) => ({
+    vod_id: v.id || '',
+    vod_name: v.name || '',
+    vod_pic: v.pic || v.img || '',
+    vod_remarks: v.note || '',
+    vod_play_url: v.dl?.dd || '',
+    vod_class: v.type || '',
+    vod_year: v.year || '',
+    vod_content: v.des || '',
+    type_name: v.tid ? `类型${v.tid}` : '',
+  }));
+
+  return {
+    page,
+    pagecount,
+    pagesize,
+    recordcount,
+    list: vodList,
+  };
+}
+
+/**
+ * 解析XML格式的视频详情
+ */
+async function parseXmlVideoDetail(xmlText: string): Promise<any> {
+  const parsed = await parseStringPromise(xmlText, {
+    explicitArray: false,
+    trim: true,
+    mergeAttrs: true,
+  });
+
+  const rss = parsed?.rss;
+  if (!rss) return null;
+
+  const list = rss.list;
+  if (!list) return null;
+
+  let videos = list.video || [];
+  if (!Array.isArray(videos)) videos = [videos];
+
+  if (videos.length === 0) return null;
+
+  const vodList = videos.map((v: any) => ({
+    vod_id: v.id || '',
+    vod_name: v.name || '',
+    vod_pic: v.pic || v.img || '',
+    vod_remarks: v.note || '',
+    vod_play_url: v.dl?.dd || '',
+    vod_class: v.type || '',
+    vod_year: v.year || '',
+    vod_content: v.des || '',
+    type_name: v.tid ? `类型${v.tid}` : '',
+  }));
+
+  return {
+    list: vodList,
+  };
 }
 
 /**
@@ -58,7 +152,25 @@ async function searchWithCache(
       return { results: [] };
     }
 
-    const data = await response.json();
+    // 读取响应文本，检测是否为XML格式
+    const responseText = await response.text();
+    let data: any;
+
+    if (isXmlResponse(response, responseText)) {
+      // XML格式：解析为JSON结构
+      data = await parseXmlVideoList(responseText);
+      if (!data) {
+        return { results: [] };
+      }
+    } else {
+      // JSON格式
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        return { results: [] };
+      }
+    }
+
     if (
       !data ||
       !data.list ||
@@ -225,7 +337,22 @@ export async function getDetailFromApi(
     throw new Error(`详情请求失败: ${response.status}`);
   }
 
-  const data = await response.json();
+  // 读取响应文本，检测是否为XML格式
+  const responseText = await response.text();
+  let data: any;
+
+  if (isXmlResponse(response, responseText)) {
+    data = await parseXmlVideoDetail(responseText);
+    if (!data) {
+      throw new Error('解析XML详情失败');
+    }
+  } else {
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      throw new Error('解析详情JSON失败');
+    }
+  }
 
   if (
     !data ||
@@ -313,7 +440,22 @@ export async function getDetailFromApiV2(
     throw new Error(`详情请求失败: ${response.status}`);
   }
 
-  const data = await response.json();
+  // 读取响应文本，检测是否为XML格式
+  const responseText = await response.text();
+  let data: any;
+
+  if (isXmlResponse(response, responseText)) {
+    data = await parseXmlVideoDetail(responseText);
+    if (!data) {
+      throw new Error('解析XML详情失败');
+    }
+  } else {
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      throw new Error('解析详情JSON失败');
+    }
+  }
 
   if (
     !data ||
