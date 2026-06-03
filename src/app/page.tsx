@@ -317,6 +317,19 @@ function HomeClient() {
     }
   }, []);
 
+  // 监听侧边栏自定义事件（AI问片、直链播放）
+  useEffect(() => {
+    const handleOpenAIChat = () => setShowAIChat(true);
+    const handleOpenDirectPlay = () => setShowDirectPlayDialog(true);
+
+    window.addEventListener('openAIChat', handleOpenAIChat);
+    window.addEventListener('openDirectPlay', handleOpenDirectPlay);
+    return () => {
+      window.removeEventListener('openAIChat', handleOpenAIChat);
+      window.removeEventListener('openDirectPlay', handleOpenDirectPlay);
+    };
+  }, []);
+
   // 检查源站寻片功能是否启用
   useEffect(() => {
     if (typeof window !== 'undefined') {
