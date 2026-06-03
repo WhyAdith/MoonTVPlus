@@ -3,6 +3,7 @@ import { parseStringPromise } from 'xml2js';
 
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { API_CONFIG, getAvailableApiSites, getConfig } from '@/lib/config';
+import { isXmlResponse } from '@/lib/xml-parser';
 import { yellowWords } from '@/lib/yellow';
 
 export const runtime = 'nodejs';
@@ -12,15 +13,6 @@ interface CmsClassResponse {
     type_id: string | number;
     type_name: string;
   }>;
-}
-
-/**
- * 检测响应是否为XML格式
- */
-function isXmlResponse(response: Response, text: string): boolean {
-  const contentType = response.headers.get('content-type') || '';
-  if (contentType.includes('xml')) return true;
-  return text.trimStart().startsWith('<?xml');
 }
 
 /**
@@ -117,7 +109,9 @@ export async function GET(request: NextRequest) {
         });
         const videoText = await videoResp.text();
         const tidMatches = videoText.match(/<tid>(\d+)<\/tid>/g) || [];
-        const uniqueTids = [...new Set(tidMatches.map(m => m.replace(/<\/?tid>/g, '')))].sort((a,b) => Number(a) - Number(b));
+        const tidMap: Record<string, boolean> = {};
+        tidMatches.forEach(m => { tidMap[m.replace(/<\/?tid>/g, '')] = true; });
+        const uniqueTids = Object.keys(tidMap).sort((a,b) => Number(a) - Number(b));
 
         const ADULT_CATEGORY_MAP: Record<string, string> = {
           '1': '电影', '2': '连续剧', '3': '综艺', '4': '动漫',

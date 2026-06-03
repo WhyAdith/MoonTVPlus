@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { API_CONFIG, getAvailableApiSites } from '@/lib/config';
 import { SearchResult } from '@/lib/types';
+import { isXmlResponse, parseXmlVideoList } from '@/lib/xml-parser';
 
 export const runtime = 'nodejs';
 
@@ -63,6 +64,20 @@ export async function GET(request: NextRequest) {
     }
 
     // 请求搜索结果
+    const isXml = targetSite.api.includes('xml.php');
+    let searchData: CmsVideoResponse;
+
+    if (isXml) {
+      // XML源不支持关键词搜索，返回空
+      // XML源只支持列表浏览和ID查询
+      return NextResponse.json({
+        results: [],
+        total: 0,
+        page: parseInt(page),
+        pageCount: 0,
+      });
+    }
+
     const searchUrl = `${targetSite.api}?ac=videolist&wd=${encodeURIComponent(keyword)}&pg=${page}`;
     const searchResponse = await fetch(searchUrl, {
       headers: API_CONFIG.search.headers,
@@ -73,7 +88,18 @@ export async function GET(request: NextRequest) {
       throw new Error('搜索失败');
     }
 
-    const searchData: CmsVideoResponse = await searchResponse.json();
+    const responseText = await searchResponse.text();
+
+    if (isXmlResponse(searchResponse, responseText)) {
+      const xmlData = await parseXmlVideoList(responseText);
+      searchData = xmlData || {};
+    } else {
+      try {
+        searchData = JSON.parse(responseText);
+      } catch {
+        throw new Error('解析搜索结果失败');
+      }
+    }
 
     if (!searchData.list || !Array.isArray(searchData.list)) {
       return NextResponse.json({

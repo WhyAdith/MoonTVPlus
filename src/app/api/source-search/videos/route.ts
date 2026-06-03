@@ -1,62 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { parseStringPromise } from 'xml2js';
 
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { API_CONFIG, getAvailableApiSites } from '@/lib/config';
 import { SearchResult } from '@/lib/types';
+import { isXmlResponse, parseXmlVideoList } from '@/lib/xml-parser';
 
 export const runtime = 'nodejs';
-
-/**
- * 检测响应是否为XML格式
- */
-function isXmlResponse(response: Response, text: string): boolean {
-  const contentType = response.headers.get('content-type') || '';
-  if (contentType.includes('xml')) return true;
-  return text.trimStart().startsWith('<?xml');
-}
-
-/**
- * 解析XML格式的视频列表
- */
-async function parseXmlVideoList(
-  xmlText: string
-): Promise<CmsVideoResponse> {
-  const parsed = await parseStringPromise(xmlText, {
-    explicitArray: false,
-    trim: true,
-    mergeAttrs: true,
-  });
-
-  const rss = parsed?.rss;
-  if (!rss) return { list: [] };
-
-  const list = rss.list;
-  if (!list) return { list: [] };
-
-  const attrs = list.$ || {};
-  const page = parseInt(attrs.page) || 1;
-  const pagecount = parseInt(attrs.pagecount) || 1;
-  const total = parseInt(attrs.recordcount) || 0;
-
-  let videos = list.video || [];
-  if (!Array.isArray(videos)) videos = [videos];
-
-  return {
-    list: videos.map((v: any) => ({
-      vod_id: v.id || '',
-      vod_name: v.name || '',
-      vod_pic: v.pic || '',
-      vod_remarks: v.note || '',
-      vod_year: '',
-      vod_play_from: '',
-      vod_play_url: v.vod_play_url || '',
-    })),
-    page,
-    pagecount,
-    total,
-  };
-}
 
 interface CmsVideoItem {
   vod_id: string | number;
