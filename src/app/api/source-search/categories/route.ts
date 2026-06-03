@@ -106,6 +106,41 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // XML源没有class数据时，从视频列表中提取tid生成分类
+    if ((!classData.class || !Array.isArray(classData.class) || classData.class.length === 0)
+        && targetSite.api.includes('xml.php')) {
+      try {
+        const videoUrl = `${targetSite.api}?ac=detail&pg=1`;
+        const videoResp = await fetch(videoUrl, {
+          headers: API_CONFIG.search.headers,
+          signal: AbortSignal.timeout(10000),
+        });
+        const videoText = await videoResp.text();
+        const tidMatches = videoText.match(/<tid>(\d+)<\/tid>/g) || [];
+        const uniqueTids = [...new Set(tidMatches.map(m => m.replace(/<\/?tid>/g, '')))].sort((a,b) => Number(a) - Number(b));
+
+        const ADULT_CATEGORY_MAP: Record<string, string> = {
+          '1': '电影', '2': '连续剧', '3': '综艺', '4': '动漫',
+          '20': '伦理片', '21': '教程', '22': '国产', '23': '国产精品',
+          '24': '日韩', '25': '欧美', '26': '中文字幕', '27': '巨乳',
+          '28': '人妻', '29': '制服诱惑', '30': '欧美精品', '31': '动漫H',
+          '33': '成人动漫', '34': '自拍', '35': 'SM调教', '36': '口交',
+          '37': '综合', '38': 'Cosplay', '39': '素人', '40': '台湾',
+          '41': '韩国', '42': '港姐', '43': '东南亚', '44': '凌辱',
+          '45': '剧情', '46': '多人', '47': '91探花', '48': '网红流出',
+        };
+
+        classData = {
+          class: uniqueTids.map(tid => ({
+            type_id: tid,
+            type_name: ADULT_CATEGORY_MAP[tid] || `分类${tid}`,
+          })),
+        };
+      } catch {
+        // fallback failed, return empty
+      }
+    }
+
     if (!classData.class || !Array.isArray(classData.class)) {
       return NextResponse.json({
         categories: [],
