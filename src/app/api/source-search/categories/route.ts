@@ -53,6 +53,7 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const sourceKey = searchParams.get('source');
+  const includeSpecialSources = searchParams.get('special') === '1';
 
   if (!sourceKey) {
     return NextResponse.json(
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const config = await getConfig();
-    const apiSites = await getAvailableApiSites(authInfo.username);
+    const apiSites = await getAvailableApiSites(authInfo.username, includeSpecialSources);
     const targetSite = apiSites.find((site) => site.key === sourceKey);
 
     if (!targetSite) {
