@@ -164,6 +164,13 @@ async function searchWithCache(
             ) {
               matchTitles.push(episode_title_url[0]);
               matchEpisodes.push(episode_title_url[1]);
+            } else if (
+              episode_title_url.length === 1 &&
+              episode_title_url[0].endsWith('.m3u8')
+            ) {
+              // 裸URL（无标题前缀），直接作为播放地址
+              matchTitles.push('');
+              matchEpisodes.push(episode_title_url[0]);
             }
           });
           if (matchEpisodes.length > episodes.length) {
@@ -345,6 +352,13 @@ export async function getDetailFromApi(
         ) {
           matchTitles.push(episode_title_url[0]);
           matchEpisodes.push(episode_title_url[1]);
+        } else if (
+          episode_title_url.length === 1 &&
+          episode_title_url[0].endsWith('.m3u8')
+        ) {
+          // 裸URL（无标题前缀），直接作为播放地址
+          matchTitles.push('');
+          matchEpisodes.push(episode_title_url[0]);
         }
       });
       if (matchEpisodes.length > episodes.length) {
