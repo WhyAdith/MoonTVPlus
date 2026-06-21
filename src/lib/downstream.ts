@@ -459,6 +459,12 @@ export async function getDetailFromApiV2(
         ) {
           matchTitles.push(episodeTitleUrl[0]);
           matchEpisodes.push(episodeTitleUrl[1]);
+        } else if (
+          episodeTitleUrl.length === 1 &&
+          episodeTitleUrl[0].endsWith('.m3u8')
+        ) {
+          matchTitles.push('');
+          matchEpisodes.push(episodeTitleUrl[0]);
         }
       });
       if (matchEpisodes.length > episodes.length) {
