@@ -1,0 +1,20 @@
+{
+  "spider": "https://congtv.cc.cd/tvbox/custom_spider.jar",
+  "wallpaper": "",
+  "sites": [
+    {"key":"lebo","name":"TV-乐播资源","type":1,"api":"https://lebozy5.com/api.php/provide/vod","searchable":1,"quickSearch":1,"filterable":1,"ext":"https://lebozy5.com"},
+    {"key":"senlin","name":"TV-森林资源","type":1,"api":"https://senlinzy2.com/api.php/provide/vod","searchable":1,"quickSearch":1,"filterable":1,"ext":"https://senlinzy2.com"},
+    {"key":"baipiao","name":"TV-白嫖资源","type":1,"api":"https://www.kxgav.com/api/xml.php","searchable":1,"quickSearch":1,"filterable":1,"ext":""},
+    {"key":"cklunli","name":"TV-CK伦理","type":1,"api":"https://ckzy.me/api.php/provide/vod","searchable":1,"quickSearch":1,"filterable":1,"ext":""},
+    {"key":"yinshuiji","name":"TV-淫水机","type":1,"api":"https://www.xrbsp.com/api/xml.php","searchable":1,"quickSearch":1,"filterable":1,"ext":""},
+    {"key":"meinv","name":"TV-美少女","type":1,"api":"https://www.msnii.com/api/xml.php","searchable":1,"quickSearch":1,"filterable":1,"ext":""},
+    {"key":"xiangnaier","name":"TV-香奶儿","type":1,"api":"https://www.gdlsp.com/api/xml.php","searchable":1,"quickSearch":1,"filterable":1,"ext":""},
+    {"key":"huangav","name":"TV-黄AV","type":1,"api":"https://www.pgxdy.com/api/xml.php","searchable":1,"quickSearch":1,"filterable":1,"ext":""}
+  ],
+  "lives": [
+    {"name":"香港频道","type":0,"url":"https://raw.githubusercontent.com/sammy0101/hk-iptv-auto/main/hk_live.m3u","epg":"https://epg.112114.xyz/pp.xml","logo":""}
+  ],
+  "parses": [],
+  "rules": [],
+  "ads": []
+}
