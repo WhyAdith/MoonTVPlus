@@ -186,7 +186,14 @@ export async function GET(request: NextRequest) {
       ),
 
       // 解析器
-      parses: [],
+      parses: [
+        { name: 'Json并发', type: 2, url: 'Parallel' },
+        { name: '聚合', type: 3, url: 'Demo' },
+        { name: 'tvbox', type: 1, url: 'http://103.45.162.53:25252/duo.php?url=' },
+        { name: 'json1', type: 1, url: 'http://103.45.162.53:25252/duo.php?url=' },
+        { name: 'json2', type: 1, url: 'https://json.vipjx.cyou/?url=' },
+        { name: 'ck', type: 1, url: 'https://ckmov.ccyjjd.com/ckmov/?url=' },
+      ],
 
       // 规则
       rules: [],
