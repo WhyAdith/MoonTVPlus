@@ -149,10 +149,8 @@ export async function GET(request: NextRequest) {
           key: site.key,
           name: site.name,
           type: 1,
-          // 开启去广告或黄色过滤时使用 CMS 代理
-          api: (adFilter || yellowFilter)
-            ? `${baseUrl}/api/cms-proxy?api=${encodeURIComponent(site.api)}${adFilter ? '&adFilter=true' : ''}${yellowFilter ? '&yellowFilter=true' : ''}`
-            : site.api,
+          // 始终使用TVBox CMS代理，自动添加ac=detail确保返回播放地址
+          api: `${baseUrl}/api/tvbox/cms-proxy?url=${encodeURIComponent(site.api)}`,
           searchable: 1,
           quickSearch: 1,
           filterable: 1,
