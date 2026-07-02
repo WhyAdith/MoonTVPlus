@@ -909,7 +909,7 @@ function HomeClient() {
               </button>
 
               {musicEnabled && (
-                <Link href='/music'>
+                <Link href='/music' prefetch={false}>
                   <button
                     className='p-1.5 rounded-lg text-green-500 hover:text-green-600 transition-colors'
                     title='音乐视听'
@@ -920,7 +920,7 @@ function HomeClient() {
               )}
 
               {mangaEnabled && (
-                <Link href='/manga'>
+                <Link href='/manga' prefetch={false}>
                   <button
                     className='p-1.5 rounded-lg text-emerald-500 hover:text-emerald-600 transition-colors'
                     title='漫画展馆'
@@ -931,7 +931,7 @@ function HomeClient() {
               )}
 
               {booksEnabled && (
-                <Link href='/books'>
+                <Link href='/books' prefetch={false}>
                   <button
                     className='p-1.5 rounded-lg text-amber-500 hover:text-amber-600 transition-colors'
                     title='电子书馆'
