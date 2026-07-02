@@ -11,6 +11,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { UpdateNotification } from './UpdateNotification';
 import { UserMenu } from './UserMenu';
 import { VersionCheckProvider } from './VersionCheckProvider';
+import { GlobalModals } from './GlobalModals';
 
 interface PageLayoutProps {
   children: React.ReactNode;
@@ -123,6 +124,8 @@ const PageLayout = ({ children, activePath = '/', hideNavigation = false }: Page
             <MobileBottomNav activePath={activePath} />
           </div>
         )}
+        
+        <GlobalModals />
       </div>
     </VersionCheckProvider>
   );
