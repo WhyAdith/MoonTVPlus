@@ -175,7 +175,7 @@ function processUrl(url: string, playFrom: string, proxyOrigin: string, tokenPar
 
   if (url.includes('.m3u8')) {
     const source = playFrom ? `&source=${encodeURIComponent(playFrom)}` : '';
-    return `${proxyOrigin}/api/proxy-m3u8?url=${encodeURIComponent(url)}${source}${tokenParam}`;
+    return `${proxyOrigin}/api/proxy-m3u8?url=${encodeURIComponent(url)}${source}${tokenParam}&ext=.m3u8`;
   }
 
   return url;
