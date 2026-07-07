@@ -31,10 +31,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // 如果没有ac参数，自动添加ac=detail
-    if (!targetUrl.searchParams.has('ac')) {
-      targetUrl.searchParams.append('ac', 'detail');
-    }
+
 
     console.log('TVBox CMS 代理请求:', targetUrl.toString());
 
