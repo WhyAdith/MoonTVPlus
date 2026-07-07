@@ -60,7 +60,13 @@ export async function GET(request: NextRequest) {
       }
 
       const proto = request.headers.get('x-forwarded-proto') ||
-      origin = `${proto}://${host}`;
+                    (host && (host.includes('localhost') || host.includes('127.0.0.1')) ? 'http' : 'https');
+      origin = host ? `${proto}://${host}` : '';
+      
+      // 腾讯云反代临时修复：强制替换 Vercel 域名
+      if (origin.includes('congtv.cc.cd') || origin.includes('vercel.app')) {
+        origin = 'http://119.91.227.199:8888';
+      }
     }
 
     // 获取原始 m3u8 内容
