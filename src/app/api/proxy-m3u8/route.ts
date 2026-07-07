@@ -52,24 +52,14 @@ export async function GET(request: NextRequest) {
     let origin = process.env.SITE_BASE;
     if (!origin) {
       // 从请求头中获取 Host 和协议
-      let host = request.headers.get('host') || request.headers.get('x-forwarded-host');
+      let host = request.headers.get('x-original-host') || request.headers.get('x-forwarded-host') || request.headers.get('host');
 
       // 安全校验：防 Host 头注入漏洞 (要求仅包含合法域名或 IP 格式字符)
       if (host && !/^[a-zA-Z0-9.-]+(:\d+)?$/.test(host)) {
         host = null;
       }
 
-      // Fallback：如果以上 Header 无效或未提供，回退到 request.url 获取
-      if (!host) {
-        try {
-          host = new URL(request.url).host;
-        } catch {
-          return NextResponse.json({ error: 'Invalid Request Host' }, { status: 400 });
-        }
-      }
-
       const proto = request.headers.get('x-forwarded-proto') ||
-        (host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https');
       origin = `${proto}://${host}`;
     }
 

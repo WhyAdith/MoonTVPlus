@@ -62,10 +62,15 @@ export async function GET(request: NextRequest) {
       // 获取当前请求的 origin
       let origin = process.env.SITE_BASE;
       if (!origin) {
-        const host = request.headers.get('host') || request.headers.get('x-forwarded-host');
+        const host = request.headers.get('x-original-host') || request.headers.get('x-forwarded-host') || request.headers.get('host');
         const proto = request.headers.get('x-forwarded-proto') ||
                       (host?.includes('localhost') || host?.includes('127.0.0.1') ? 'http' : 'https');
         origin = `${proto}://${host}`;
+        
+        // 腾讯云反代临时修复：强制替换 Vercel 域名
+        if (origin.includes('congtv.cc.cd') || origin.includes('vercel.app')) {
+          origin = 'http://119.91.227.199:8888';
+        }
       }
 
       // 处理返回数据，替换播放链接为代理链接
