@@ -166,37 +166,23 @@ function processCmsResponse(data: any, proxyOrigin: string): any {
   const proxyToken = process.env.NEXT_PUBLIC_PROXY_M3U8_TOKEN || '';
   const tokenParam = proxyToken ? `&token=${encodeURIComponent(proxyToken)}` : '';
 
-  // 自动修复 MacCMS 分类：如果返回了 class 数组，自动生成 filters 并扁平化父级
+  // 自动修复 MacCMS 分类：一些 TVBox 客户端不支持动态 filters。
+  // 最稳妥的方法是扁平化分类，移除父分类，只把子分类（有实际影片的分类）作为顶级 Tab。
   if (processedData.class && Array.isArray(processedData.class)) {
-    const filters: Record<string, any[]> = {};
-    const parents = processedData.class.filter((c: any) => c.type_pid === 0 || !c.type_pid);
-    const children = processedData.class.filter((c: any) => c.type_pid && c.type_pid !== 0);
-
-    parents.forEach((parent: any) => {
-      const parentChildren = children.filter((c: any) => c.type_pid === parent.type_id);
-      if (parentChildren.length > 0) {
-        filters[parent.type_id.toString()] = [
-          {
-            key: 'tid',
-            name: '类型',
-            init: parent.type_id.toString(),
-            value: [
-              { n: '全部', v: parent.type_id.toString() },
-              ...parentChildren.map((c: any) => ({ n: c.type_name, v: c.type_id.toString() }))
-            ]
-          }
-        ];
-      }
+    // 找出所有作为父级的 ID
+    const parentIds = new Set(processedData.class.map((c: any) => c.type_pid).filter((pid: any) => pid !== 0 && pid !== undefined));
+    
+    // 只保留叶子节点（即没有子分类的节点）和没有父分类的孤立节点
+    // 过滤掉真正的父分类（比如“电影片”，因为它的影片都在“动作片”里）
+    const leafCategories = processedData.class.filter((c: any) => {
+      // 如果它被别人当做父级，那它就是父级，我们过滤掉它
+      if (parentIds.has(c.type_id)) return false;
+      // 否则保留
+      return true;
     });
-    
-    if (Object.keys(filters).length > 0) {
-      processedData.filters = filters;
-    }
-    
-    // 只保留父分类作为主 Tab，如果某些分类没有父分类，也保留
-    // 避免 TVBox 头部出现太多子分类
-    if (parents.length > 0) {
-      processedData.class = parents;
+
+    if (leafCategories.length > 0) {
+      processedData.class = leafCategories;
     }
   }
 
