@@ -327,7 +327,7 @@ function resolveM3u8Links(m3u8Content: string, baseUrl: string, source: string, 
     const isM3u8 = url.includes('.m3u8') || isNextLineUrl;
     if (isM3u8) {
       const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-      url = `${proxyOrigin}/api/proxy-m3u8?url=${encodeURIComponent(url)}${source ? `&source=${encodeURIComponent(source)}` : ''}${tokenParam}`;
+      url = `${proxyOrigin}/api/proxy-m3u8/play.m3u8?url=${encodeURIComponent(url)}${source ? `&source=${encodeURIComponent(source)}` : ''}${tokenParam}`;
     } else if (source === 'directplay') {
       // 直链播放模式：通过代理访问媒体分片（ts/jpeg/png 等），避免 CORS 问题
       url = `${proxyOrigin}/api/proxy/vod/segment?url=${encodeURIComponent(url)}&source=directplay`;

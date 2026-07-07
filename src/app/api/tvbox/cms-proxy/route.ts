@@ -43,21 +43,27 @@ async function handleRequest(request: NextRequest) {
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
-      let proxyMethod = request.method;
+      // 强制转换为 GET 请求，因为很多资源站（MacCMS）会用 WAF 拦截 POST 请求
+      let proxyMethod = 'GET';
       
       if (request.method === 'POST') {
-        const contentType = request.headers.get('content-type') || '';
         try {
           const bodyText = await request.text();
           if (bodyText) {
-            // 如果是 TVBox 常见的表单提交，将其转换为 GET 参数
-            if (contentType.includes('application/x-www-form-urlencoded')) {
+            // 尝试解析为 URL参数 格式 (TVBox 默认的提交格式)
+            if (bodyText.includes('=') || (request.headers.get('content-type') || '').includes('urlencoded')) {
               const bodyParams = new URLSearchParams(bodyText);
               bodyParams.forEach((value, key) => {
                 targetUrl.searchParams.append(key, value);
               });
-              // 强制转换为 GET 请求，因为很多资源站（MacCMS）会用 WAF 拦截 POST 请求
-              proxyMethod = 'GET';
+            } else {
+              // 尝试解析 JSON
+              try {
+                const jsonObj = JSON.parse(bodyText);
+                Object.keys(jsonObj).forEach(key => {
+                  targetUrl.searchParams.append(key, jsonObj[key]);
+                });
+              } catch (e) {}
             }
           }
         } catch (e) {
@@ -211,7 +217,7 @@ function processUrl(url: string, playFrom: string, proxyOrigin: string, tokenPar
 
   if (url.includes('.m3u8')) {
     const source = playFrom ? `&source=${encodeURIComponent(playFrom)}` : '';
-    return `${proxyOrigin}/api/proxy-m3u8?url=${encodeURIComponent(url)}${source}${tokenParam}&ext=.m3u8`;
+    return `${proxyOrigin}/api/proxy-m3u8/play.m3u8?url=${encodeURIComponent(url)}${source}${tokenParam}`;
   }
 
   return url;
