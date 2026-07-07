@@ -10,6 +10,14 @@ export const runtime = 'nodejs';
  * GET /api/tvbox/cms-proxy?url=<CMS API地址>&参数1=值1&参数2=值2...
  */
 export async function GET(request: NextRequest) {
+  return handleRequest(request);
+}
+
+export async function POST(request: NextRequest) {
+  return handleRequest(request);
+}
+
+async function handleRequest(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const apiUrl = searchParams.get('url');
@@ -31,21 +39,37 @@ export async function GET(request: NextRequest) {
       }
     });
 
-
-
-    console.log('TVBox CMS 代理请求:', targetUrl.toString());
+    console.log(`TVBox CMS 代理请求 [${request.method}]:`, targetUrl.toString());
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
-      const response = await fetch(targetUrl.toString(), {
+      const fetchOptions: RequestInit = {
+        method: request.method,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Accept': 'application/json',
         },
         signal: controller.signal,
-      });
+      };
+
+      if (request.method === 'POST') {
+        const contentType = request.headers.get('content-type');
+        if (contentType) {
+          (fetchOptions.headers as any)['Content-Type'] = contentType;
+        }
+        try {
+          const bodyBuffer = await request.arrayBuffer();
+          if (bodyBuffer.byteLength > 0) {
+            fetchOptions.body = bodyBuffer;
+          }
+        } catch (e) {
+          console.warn('读取 POST body 失败:', e);
+        }
+      }
+
+      const response = await fetch(targetUrl.toString(), fetchOptions);
 
       clearTimeout(timeoutId);
 
