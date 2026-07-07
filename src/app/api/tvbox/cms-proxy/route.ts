@@ -34,10 +34,15 @@ async function handleRequest(request: NextRequest) {
 
     // 将所有查询参数（除了 url）转发到目标 API
     searchParams.forEach((value, key) => {
-      if (key !== 'url') {
+      if (key !== 'url' && key !== 'tid') {
         targetUrl.searchParams.append(key, value);
       }
     });
+    
+    // 如果存在 tid 参数（来自我们自己生成的 filter），则覆盖原来的 t 参数
+    if (searchParams.has('tid') && searchParams.get('tid')) {
+      targetUrl.searchParams.set('t', searchParams.get('tid')!);
+    }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -54,14 +59,22 @@ async function handleRequest(request: NextRequest) {
             if (bodyText.includes('=') || (request.headers.get('content-type') || '').includes('urlencoded')) {
               const bodyParams = new URLSearchParams(bodyText);
               bodyParams.forEach((value, key) => {
-                targetUrl.searchParams.append(key, value);
+                if (key === 'tid' && value) {
+                  targetUrl.searchParams.set('t', value);
+                } else if (key !== 'tid') {
+                  targetUrl.searchParams.append(key, value);
+                }
               });
             } else {
               // 尝试解析 JSON
               try {
                 const jsonObj = JSON.parse(bodyText);
                 Object.keys(jsonObj).forEach(key => {
-                  targetUrl.searchParams.append(key, jsonObj[key]);
+                  if (key === 'tid' && jsonObj[key]) {
+                    targetUrl.searchParams.set('t', jsonObj[key]);
+                  } else if (key !== 'tid') {
+                    targetUrl.searchParams.append(key, jsonObj[key]);
+                  }
                 });
               } catch (e) {}
             }
@@ -152,6 +165,40 @@ function processCmsResponse(data: any, proxyOrigin: string): any {
   // 获取 M3U8 代理 token
   const proxyToken = process.env.NEXT_PUBLIC_PROXY_M3U8_TOKEN || '';
   const tokenParam = proxyToken ? `&token=${encodeURIComponent(proxyToken)}` : '';
+
+  // 自动修复 MacCMS 分类：如果返回了 class 数组，自动生成 filters 并扁平化父级
+  if (processedData.class && Array.isArray(processedData.class)) {
+    const filters: Record<string, any[]> = {};
+    const parents = processedData.class.filter((c: any) => c.type_pid === 0 || !c.type_pid);
+    const children = processedData.class.filter((c: any) => c.type_pid && c.type_pid !== 0);
+
+    parents.forEach((parent: any) => {
+      const parentChildren = children.filter((c: any) => c.type_pid === parent.type_id);
+      if (parentChildren.length > 0) {
+        filters[parent.type_id.toString()] = [
+          {
+            key: 'tid',
+            name: '类型',
+            init: parent.type_id.toString(),
+            value: [
+              { n: '全部', v: parent.type_id.toString() },
+              ...parentChildren.map((c: any) => ({ n: c.type_name, v: c.type_id.toString() }))
+            ]
+          }
+        ];
+      }
+    });
+    
+    if (Object.keys(filters).length > 0) {
+      processedData.filters = filters;
+    }
+    
+    // 只保留父分类作为主 Tab，如果某些分类没有父分类，也保留
+    // 避免 TVBox 头部出现太多子分类
+    if (parents.length > 0) {
+      processedData.class = parents;
+    }
+  }
 
   // 处理列表数据
   if (processedData.list && Array.isArray(processedData.list)) {
