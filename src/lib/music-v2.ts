@@ -209,8 +209,13 @@ export async function getMusicV2Config() {
   const musicConfig = config?.MusicConfig;
 
   const enabled = musicConfig?.Enabled ?? false;
-  const baseUrl = (musicConfig?.BaseUrl || process.env.MUSIC_V2_BASE_URL || '').replace(/\/$/, '');
+  let baseUrl = (musicConfig?.BaseUrl || process.env.MUSIC_V2_BASE_URL || '').replace(/\/$/, '');
   const token = musicConfig?.Token || process.env.MUSIC_V2_TOKEN || '';
+
+  // 腾讯云反代临时修复：强制替换 Vercel 域名
+  if (baseUrl.includes('congtv.cc.cd') || baseUrl.includes('vercel.app')) {
+    baseUrl = 'http://119.91.227.199:8888';
+  }
 
   return { enabled, baseUrl, token };
 }
@@ -238,7 +243,21 @@ async function lxFetch(path: string, init: RequestInit = {}, authMode: LxFetchAu
     throw new Error('未配置音乐服务访问 Token');
   }
 
-  const response = await fetch(`${baseUrl}${path}`, {
+  let requestUrl = `${baseUrl}${path}`;
+  try {
+    const urlObj = new URL(requestUrl);
+    if (urlObj.username || urlObj.password) {
+      const basicAuth = Buffer.from(`${decodeURIComponent(urlObj.username)}:${decodeURIComponent(urlObj.password)}`).toString('base64');
+      headers.set('Authorization', `Basic ${basicAuth}`);
+      urlObj.username = '';
+      urlObj.password = '';
+      requestUrl = urlObj.toString();
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  const response = await fetch(requestUrl, {
     ...init,
     headers,
     signal: AbortSignal.timeout(45000),
