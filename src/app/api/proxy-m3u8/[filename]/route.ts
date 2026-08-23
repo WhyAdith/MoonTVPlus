@@ -18,6 +18,8 @@ export async function GET(request: NextRequest) {
     const m3u8Url = searchParams.get('url');
     const source = searchParams.get('source') || '';
     const token = searchParams.get('token');
+    const adBlockEnabled = searchParams.get('adblock') !== 'false';
+    const proxySegments = searchParams.get('proxySegments') === 'true';
 
     // Token 鉴权：如果环境变量设置了 token，则必须验证
     const envToken = process.env.NEXT_PUBLIC_PROXY_M3U8_TOKEN;
@@ -52,21 +54,25 @@ export async function GET(request: NextRequest) {
     let origin = process.env.SITE_BASE;
     if (!origin) {
       // 从请求头中获取 Host 和协议
-      let host = request.headers.get('x-original-host') || request.headers.get('x-forwarded-host') || request.headers.get('host');
+      let host = request.headers.get('host') || request.headers.get('x-forwarded-host');
 
       // 安全校验：防 Host 头注入漏洞 (要求仅包含合法域名或 IP 格式字符)
       if (host && !/^[a-zA-Z0-9.-]+(:\d+)?$/.test(host)) {
         host = null;
       }
 
-      const proto = request.headers.get('x-forwarded-proto') ||
-                    (host && (host.includes('localhost') || host.includes('127.0.0.1')) ? 'http' : 'https');
-      origin = host ? `${proto}://${host}` : '';
-      
-      // 腾讯云反代临时修复：强制替换 Vercel 域名
-      if (origin.includes('congtv.cc.cd') || origin.includes('vercel.app')) {
-        origin = 'http://119.91.227.199:8888';
+      // Fallback：如果以上 Header 无效或未提供，回退到 request.url 获取
+      if (!host) {
+        try {
+          host = new URL(request.url).host;
+        } catch {
+          return NextResponse.json({ error: 'Invalid Request Host' }, { status: 400 });
+        }
       }
+
+      const proto = request.headers.get('x-forwarded-proto') ||
+        (host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https');
+      origin = `${proto}://${host}`;
     }
 
     // 获取原始 m3u8 内容
@@ -140,35 +146,45 @@ export async function GET(request: NextRequest) {
       // 不直接拒绝（可能是不规范但仍可播放的 m3u8），仅打印警告继续处理
     }
 
-    // 执行去广告逻辑
-    const config = await getConfig();
-    const customAdFilterCode = config.SiteConfig?.CustomAdFilterCode || '';
+    // 执行去广告逻辑；原生 HLS 可通过 adblock=false 保留代理但关闭过滤。
+    if (adBlockEnabled) {
+      const config = await getConfig();
+      const customAdFilterCode = config.SiteConfig?.CustomAdFilterCode || '';
 
-    if (customAdFilterCode && customAdFilterCode.trim()) {
-      try {
-        // 移除 TypeScript 类型注解,转换为纯 JavaScript
-        const jsCode = customAdFilterCode
-          .replace(/(\w+)\s*:\s*(string|number|boolean|any|void|never|unknown|object)\s*([,)])/g, '$1$3')
-          .replace(/\)\s*:\s*(string|number|boolean|any|void|never|unknown|object)\s*\{/g, ') {')
-          .replace(/(const|let|var)\s+(\w+)\s*:\s*(string|number|boolean|any|void|never|unknown|object)\s*=/g, '$1 $2 =');
+      if (customAdFilterCode && customAdFilterCode.trim()) {
+        try {
+          // 移除 TypeScript 类型注解,转换为纯 JavaScript
+          const jsCode = customAdFilterCode
+            .replace(/(\w+)\s*:\s*(string|number|boolean|any|void|never|unknown|object)\s*([,)])/g, '$1$3')
+            .replace(/\)\s*:\s*(string|number|boolean|any|void|never|unknown|object)\s*\{/g, ') {')
+            .replace(/(const|let|var)\s+(\w+)\s*:\s*(string|number|boolean|any|void|never|unknown|object)\s*=/g, '$1 $2 =');
 
-        // 创建并执行自定义函数
-        const customFunction = new Function('type', 'm3u8Content',
-          jsCode + '\nreturn filterAdsFromM3U8(type, m3u8Content);'
-        );
-        m3u8Content = customFunction(source, m3u8Content);
-      } catch (err) {
-        console.error('执行自定义去广告代码失败,使用默认规则:', err);
-        // 继续使用默认规则
+          // 创建并执行自定义函数
+          const customFunction = new Function('type', 'm3u8Content',
+            jsCode + '\nreturn filterAdsFromM3U8(type, m3u8Content);'
+          );
+          m3u8Content = customFunction(source, m3u8Content);
+        } catch (err) {
+          console.error('执行自定义去广告代码失败,使用默认规则:', err);
+          // 继续使用默认规则
+          m3u8Content = filterAdsFromM3U8Default(source, m3u8Content);
+        }
+      } else {
+        // 使用默认去广告规则
         m3u8Content = filterAdsFromM3U8Default(source, m3u8Content);
       }
-    } else {
-      // 使用默认去广告规则
-      m3u8Content = filterAdsFromM3U8Default(source, m3u8Content);
     }
 
     // 处理 m3u8 中的相对链接
-    m3u8Content = resolveM3u8Links(m3u8Content, m3u8Url, source, origin, token || '');
+    m3u8Content = resolveM3u8Links(
+      m3u8Content,
+      m3u8Url,
+      source,
+      origin,
+      token || '',
+      adBlockEnabled,
+      proxySegments
+    );
 
     // 返回处理后的 m3u8 内容
     return new NextResponse(m3u8Content, {
@@ -250,9 +266,17 @@ function filterAdsFromM3U8Default(type: string, m3u8Content: string): string {
  * 将 m3u8 中的相对链接转换为绝对链接，并将子 m3u8 链接转为代理链接。
  * 此函数仅在代理模式下由服务端调用。
  * - 子 m3u8 链接 → 指向 /api/proxy-m3u8（递归代理）
- * - ts 分片/密钥 → directplay 模式指向 /api/proxy/vod/segment（解决 CORS）
+ * - ts 分片/密钥 → directplay 或 proxySegments 模式指向 /api/proxy/vod/segment
  */
-function resolveM3u8Links(m3u8Content: string, baseUrl: string, source: string, proxyOrigin: string, token: string): string {
+function resolveM3u8Links(
+  m3u8Content: string,
+  baseUrl: string,
+  source: string,
+  proxyOrigin: string,
+  token: string,
+  adBlockEnabled: boolean,
+  proxySegments: boolean
+): string {
   const lines = m3u8Content.split('\n');
   const resolvedLines = [];
 
@@ -281,9 +305,9 @@ function resolveM3u8Links(m3u8Content: string, baseUrl: string, source: string, 
           }
         }
 
-        // 直链播放模式：通过代理访问密钥，避免 CORS 问题
-        if (source === 'directplay') {
-          keyUri = `${proxyOrigin}/api/proxy/vod/segment?url=${encodeURIComponent(keyUri)}&source=directplay`;
+        // 直链/全量代理模式：通过代理访问密钥，避免 CORS 问题
+        if (source === 'directplay' || proxySegments) {
+          keyUri = `${proxyOrigin}/api/proxy/vod/segment?url=${encodeURIComponent(keyUri)}&source=${encodeURIComponent(source)}`;
         }
 
         // 替换原来的 URI
@@ -327,10 +351,12 @@ function resolveM3u8Links(m3u8Content: string, baseUrl: string, source: string, 
     const isM3u8 = url.includes('.m3u8') || isNextLineUrl;
     if (isM3u8) {
       const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-      url = `${proxyOrigin}/api/proxy-m3u8/play.m3u8?url=${encodeURIComponent(url)}${source ? `&source=${encodeURIComponent(source)}` : ''}${tokenParam}`;
-    } else if (source === 'directplay') {
-      // 直链播放模式：通过代理访问媒体分片（ts/jpeg/png 等），避免 CORS 问题
-      url = `${proxyOrigin}/api/proxy/vod/segment?url=${encodeURIComponent(url)}&source=directplay`;
+      const adBlockParam = adBlockEnabled ? '' : '&adblock=false';
+      const proxySegmentsParam = proxySegments ? '&proxySegments=true' : '';
+      url = `${proxyOrigin}/api/proxy-m3u8?url=${encodeURIComponent(url)}${source ? `&source=${encodeURIComponent(source)}` : ''}${tokenParam}${adBlockParam}${proxySegmentsParam}`;
+    } else if (source === 'directplay' || proxySegments) {
+      // 直链/全量代理模式：通过代理访问媒体分片（ts/jpeg/png 等）
+      url = `${proxyOrigin}/api/proxy/vod/segment?url=${encodeURIComponent(url)}&source=${encodeURIComponent(source)}`;
     }
 
     resolvedLines.push(url);
