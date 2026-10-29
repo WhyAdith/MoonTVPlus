@@ -106,7 +106,7 @@ export async function GET(request: Request) {
 function rewriteM3U8Content(content: string, baseUrl: string, req: Request, source: string) {
   // 从 referer 头提取协议信息
   const referer = req.headers.get('referer');
-  let protocol = 'http';
+  let protocol = 'https';
   if (referer) {
     try {
       const refererUrl = new URL(referer);

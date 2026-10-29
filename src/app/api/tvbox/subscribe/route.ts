@@ -85,15 +85,20 @@ export async function GET(request: NextRequest) {
       : [];
 
     // 获取当前请求的 origin，用于构建代理链接
-    // 优先级：SITE_BASE 环境变量 > origin 参数 > 从请求头构建
+    // 优先级：SITE_BASE 环境变量 > origin 参数 > X-Original-Host > 从请求头构建
     let baseUrl = process.env.SITE_BASE || searchParams.get('origin');
 
     if (!baseUrl) {
       // 从请求头中获取 Host 和协议
-      const host = request.headers.get('host') || request.headers.get('x-forwarded-host');
-      const proto = request.headers.get('x-forwarded-proto') ||
+      const host = request.headers.get('x-original-host') || request.headers.get('x-forwarded-host') || request.headers.get('host');
+      const proto = request.headers.get('x-forwarded-proto') || 
                     (host?.includes('localhost') || host?.includes('127.0.0.1') ? 'http' : 'https');
       baseUrl = `${proto}://${host}`;
+      
+      // 腾讯云反代临时修复：强制替换 Vercel 域名
+      if (baseUrl.includes('congtv.cc.cd') || baseUrl.includes('vercel.app')) {
+        baseUrl = 'http://119.91.227.199:8888';
+      }
     }
 
     console.log('TVBOX 订阅 baseUrl:', baseUrl, 'adFilter:', adFilter, 'yellowFilter:', yellowFilter);
@@ -149,10 +154,8 @@ export async function GET(request: NextRequest) {
           key: site.key,
           name: site.name,
           type: 1,
-          // 开启去广告或黄色过滤时使用 CMS 代理
-          api: (adFilter || yellowFilter)
-            ? `${baseUrl}/api/cms-proxy?api=${encodeURIComponent(site.api)}${adFilter ? '&adFilter=true' : ''}${yellowFilter ? '&yellowFilter=true' : ''}`
-            : site.api,
+          // 根据 adFilter 参数决定是否使用代理
+          api: adFilter ? `${baseUrl}/api/tvbox/cms-proxy?url=${encodeURIComponent(site.api)}` : site.api,
           searchable: 1,
           quickSearch: 1,
           filterable: 1,
@@ -186,7 +189,14 @@ export async function GET(request: NextRequest) {
       ),
 
       // 解析器
-      parses: [],
+      parses: [
+        { name: 'Json并发', type: 2, url: 'Parallel' },
+        { name: '聚合', type: 3, url: 'Demo' },
+        { name: 'tvbox', type: 1, url: 'http://103.45.162.53:25252/duo.php?url=' },
+        { name: 'json1', type: 1, url: 'http://103.45.162.53:25252/duo.php?url=' },
+        { name: 'json2', type: 1, url: 'https://json.vipjx.cyou/?url=' },
+        { name: 'ck', type: 1, url: 'https://ckmov.ccyjjd.com/ckmov/?url=' },
+      ],
 
       // 规则
       rules: [],

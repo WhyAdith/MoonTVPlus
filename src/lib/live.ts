@@ -1,8 +1,8 @@
 /* eslint-disable no-constant-condition */
 
 import { getConfig } from '@/lib/config';
-import { db } from '@/lib/db';
 import { fetchLive } from '@/lib/live-http';
+import { db } from '@/lib/db';
 
 const defaultUA = 'AptvPlayer/1.4.10';
 
@@ -59,7 +59,29 @@ export async function getCachedLiveChannels(
 ): Promise<LiveChannels | null> {
   if (!cachedLiveChannels[key]) {
     const config = await getConfig();
-    const liveInfo = config.LiveConfig?.find((live) => live.key === key);
+    let liveInfo = config.LiveConfig?.find((live) => live.key === key);
+
+    // 如果在 config.LiveConfig 中找不到，检查是否是环境变量源
+    if (!liveInfo && key.startsWith('env-live-')) {
+      const envLiveSourceUrl = process.env.LIVE_SOURCE_URL;
+      if (envLiveSourceUrl) {
+        const urls = envLiveSourceUrl
+          .split(/[,\n]/)
+          .map((url) => url.trim())
+          .filter((url) => url.length > 0 && url.startsWith('http'));
+        const index = parseInt(key.replace('env-live-', ''), 10);
+        if (!isNaN(index) && index < urls.length) {
+          liveInfo = {
+            key,
+            name: `环境变量源 ${index + 1}`,
+            url: urls[index],
+            from: 'custom',
+            disabled: false,
+          };
+        }
+      }
+    }
+
     if (!liveInfo) {
       return null;
     }

@@ -1,13 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { parseStringPromise } from 'xml2js';
 
 import { API_CONFIG, ApiSite, getConfig } from '@/lib/config';
-import { parseJsonLosslessIntegers } from '@/lib/json';
 import { getCachedSearchPage, setCachedSearchPage } from '@/lib/search-cache';
 import { SearchResult } from '@/lib/types';
 import { cleanHtmlTags } from '@/lib/utils';
+import { isXmlResponse, parseXmlVideoList } from '@/lib/xml-parser';
+import { parseJsonLosslessIntegers } from '@/lib/json';
 
 interface ApiSearchItem {
-  vod_id: string | number;
+  vod_id: string;
   vod_name: string;
   vod_pic: string;
   vod_remarks?: string;
@@ -18,6 +20,59 @@ interface ApiSearchItem {
   vod_douban_id?: number;
   type_name?: string;
   vod_total?: number;
+}
+
+/**
+ * 解析XML格式的视频详情
+ */
+async function parseXmlVideoDetail(xmlText: string): Promise<any> {
+  const parsed = await parseStringPromise(xmlText, {
+    explicitArray: false,
+    trim: true,
+    mergeAttrs: true,
+  });
+
+  const rss = parsed?.rss;
+  if (!rss) return null;
+
+  const list = rss.list;
+  if (!list) return null;
+
+  let videos = list.video || [];
+  if (!Array.isArray(videos)) videos = [videos];
+
+  if (videos.length === 0) return null;
+
+  const vodList = videos.map((v: any) => {
+    // 解析播放地址 - XML格式: <dl><dd flag="ckplayer">url</dd></dl>
+    let playUrl = '';
+    if (v.dl?.dd) {
+      const dd = v.dl.dd;
+      if (Array.isArray(dd)) {
+        const firstDd = dd[0];
+        playUrl = typeof firstDd === 'string' ? firstDd : (firstDd._ || '');
+      } else if (typeof dd === 'string') {
+        playUrl = dd;
+      } else if (dd._) {
+        playUrl = dd._;
+      }
+    }
+    return {
+      vod_id: v.id || '',
+      vod_name: v.name || '',
+      vod_pic: v.pic || v.img || '',
+      vod_remarks: v.note || '',
+      vod_play_url: playUrl,
+      vod_class: v.type || '',
+      vod_year: v.year || '',
+      vod_content: v.des || '',
+      type_name: v.tid ? `类型${v.tid}` : '',
+    };
+  });
+
+  return {
+    list: vodList,
+  };
 }
 
 /**
@@ -59,7 +114,25 @@ async function searchWithCache(
       return { results: [] };
     }
 
-    const data = parseJsonLosslessIntegers<any>(await response.text());
+    // 读取响应文本，检测是否为XML格式
+    const responseText = await response.text();
+    let data: any;
+
+    if (isXmlResponse(response, responseText)) {
+      // XML格式：解析为JSON结构
+      data = await parseXmlVideoList(responseText);
+      if (!data) {
+        return { results: [] };
+      }
+    } else {
+      // JSON格式
+      try {
+        data = parseJsonLosslessIntegers<any>(responseText);
+      } catch {
+        return { results: [] };
+      }
+    }
+
     if (
       !data ||
       !data.list ||
@@ -92,6 +165,13 @@ async function searchWithCache(
             ) {
               matchTitles.push(episode_title_url[0]);
               matchEpisodes.push(episode_title_url[1]);
+            } else if (
+              episode_title_url.length === 1 &&
+              episode_title_url[0].endsWith('.m3u8')
+            ) {
+              // 裸URL（无标题前缀），直接作为播放地址
+              matchTitles.push('');
+              matchEpisodes.push(episode_title_url[0]);
             }
           });
           if (matchEpisodes.length > episodes.length) {
@@ -226,7 +306,22 @@ export async function getDetailFromApi(
     throw new Error(`详情请求失败: ${response.status}`);
   }
 
-  const data = parseJsonLosslessIntegers<any>(await response.text());
+  // 读取响应文本，检测是否为XML格式
+  const responseText = await response.text();
+  let data: any;
+
+  if (isXmlResponse(response, responseText)) {
+    data = await parseXmlVideoDetail(responseText);
+    if (!data) {
+      throw new Error('解析XML详情失败');
+    }
+  } else {
+    try {
+      data = parseJsonLosslessIntegers<any>(responseText);
+    } catch {
+      throw new Error('解析详情JSON失败');
+    }
+  }
 
   if (
     !data ||
@@ -258,6 +353,13 @@ export async function getDetailFromApi(
         ) {
           matchTitles.push(episode_title_url[0]);
           matchEpisodes.push(episode_title_url[1]);
+        } else if (
+          episode_title_url.length === 1 &&
+          episode_title_url[0].endsWith('.m3u8')
+        ) {
+          // 裸URL（无标题前缀），直接作为播放地址
+          matchTitles.push('');
+          matchEpisodes.push(episode_title_url[0]);
         }
       });
       if (matchEpisodes.length > episodes.length) {
@@ -314,7 +416,22 @@ export async function getDetailFromApiV2(
     throw new Error(`详情请求失败: ${response.status}`);
   }
 
-  const data = parseJsonLosslessIntegers<any>(await response.text());
+  // 读取响应文本，检测是否为XML格式
+  const responseText = await response.text();
+  let data: any;
+
+  if (isXmlResponse(response, responseText)) {
+    data = await parseXmlVideoDetail(responseText);
+    if (!data) {
+      throw new Error('解析XML详情失败');
+    }
+  } else {
+    try {
+      data = parseJsonLosslessIntegers<any>(responseText);
+    } catch {
+      throw new Error('解析详情JSON失败');
+    }
+  }
 
   if (
     !data ||
@@ -343,6 +460,12 @@ export async function getDetailFromApiV2(
         ) {
           matchTitles.push(episodeTitleUrl[0]);
           matchEpisodes.push(episodeTitleUrl[1]);
+        } else if (
+          episodeTitleUrl.length === 1 &&
+          episodeTitleUrl[0].endsWith('.m3u8')
+        ) {
+          matchTitles.push('');
+          matchEpisodes.push(episodeTitleUrl[0]);
         }
       });
       if (matchEpisodes.length > episodes.length) {
