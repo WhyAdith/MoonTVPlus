@@ -27,9 +27,9 @@ export async function GET(request: NextRequest) {
       data: channelData.channels
     });
   } catch (error) {
-    console.error('[live/channels] error:', error);
+    console.error('获取频道信息失败:', error instanceof Error ? error.message : error);
     return NextResponse.json(
-      { error: '获取频道信息失败' },
+      { error: '获取频道信息失败', detail: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

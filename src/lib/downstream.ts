@@ -9,7 +9,7 @@ import { isXmlResponse, parseXmlVideoList } from '@/lib/xml-parser';
 import { parseJsonLosslessIntegers } from '@/lib/json';
 
 interface ApiSearchItem {
-  vod_id: string;
+  vod_id: string | number;
   vod_name: string;
   vod_pic: string;
   vod_remarks?: string;

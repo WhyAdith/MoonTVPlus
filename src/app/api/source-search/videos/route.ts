@@ -4,6 +4,7 @@ import { getAuthInfoFromCookie } from '@/lib/auth';
 import { API_CONFIG, getAvailableApiSites } from '@/lib/config';
 import { parseJsonLosslessIntegers } from '@/lib/json';
 import { SearchResult } from '@/lib/types';
+import { isXmlResponse, parseXmlVideoList } from '@/lib/xml-parser';
 
 export const runtime = 'nodejs';
 
@@ -75,9 +76,19 @@ export async function GET(request: NextRequest) {
       throw new Error('获取视频列表失败');
     }
 
-    const videoData = parseJsonLosslessIntegers<CmsVideoResponse>(
-      await videoResponse.text()
-    );
+    // 读取响应文本，检测是否为XML格式
+    const responseText = await videoResponse.text();
+    let videoData: CmsVideoResponse;
+
+    if (isXmlResponse(videoResponse, responseText)) {
+      videoData = await parseXmlVideoList(responseText);
+    } else {
+      try {
+        videoData = parseJsonLosslessIntegers<CmsVideoResponse>(responseText);
+      } catch {
+        throw new Error('解析视频列表失败');
+      }
+    }
 
     if (!videoData.list || !Array.isArray(videoData.list)) {
       return NextResponse.json({
@@ -94,17 +105,27 @@ export async function GET(request: NextRequest) {
       const episodes_titles: string[] = [];
 
       // 解析播放信息
-      if (item.vod_play_url && item.vod_play_from) {
-        const playUrls = item.vod_play_url.split('#');
-        playUrls.forEach((episodeStr) => {
-          if (episodeStr.trim()) {
-            const [name, url] = episodeStr.split('$');
-            if (name && url) {
-              episodes.push(url.trim());
-              episodes_titles.push(name.trim());
+      if (item.vod_play_url) {
+        if (item.vod_play_from) {
+          // JSON源格式: name$url#name2$url2
+          const playUrls = item.vod_play_url.split('#');
+          playUrls.forEach((episodeStr) => {
+            if (episodeStr.trim()) {
+              const parts = episodeStr.split('$');
+              if (parts.length >= 2) {
+                episodes.push(parts[1].trim());
+                episodes_titles.push(parts[0].trim());
+              } else if (parts[0].trim().endsWith('.m3u8')) {
+                episodes.push(parts[0].trim());
+                episodes_titles.push('播放');
+              }
             }
-          }
-        });
+          });
+        } else if (item.vod_play_url.includes('.m3u8')) {
+          // XML源格式: 直接是m3u8 URL
+          episodes.push(item.vod_play_url.trim());
+          episodes_titles.push('播放');
+        }
       }
 
       return {
